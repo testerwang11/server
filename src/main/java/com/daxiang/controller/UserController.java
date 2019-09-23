@@ -20,7 +20,7 @@ public class UserController {
 
     @PostMapping("/login")
     public Response login(@Valid @RequestBody User user) {
-        return userService.login(user);
+        return userService.loginByLDAP(user);
     }
 
     @PostMapping("/register")
