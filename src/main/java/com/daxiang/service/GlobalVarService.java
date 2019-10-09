@@ -1,6 +1,5 @@
 package com.daxiang.service;
 
-import com.daxiang.mbg.po.Action;
 import com.daxiang.mbg.po.GlobalVarExample;
 import com.daxiang.model.UserCache;
 import com.github.pagehelper.PageHelper;
@@ -13,7 +12,6 @@ import com.daxiang.model.Page;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
-import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 import java.util.Date;
@@ -28,8 +26,6 @@ public class GlobalVarService extends BaseService {
 
     @Autowired
     private GlobalVarMapper globalVarMapper;
-    @Autowired
-    private ActionService actionService;
 
     /**
      * 添加全局变量
@@ -60,16 +56,6 @@ public class GlobalVarService extends BaseService {
             return Response.fail("globalVarId不能为空");
         }
 
-        // 校验全局变量是否被其他action使用
-        GlobalVar globalVar = globalVarMapper.selectByPrimaryKey(globalVarId);
-        if (globalVar == null) {
-            return Response.fail("GlobalVar不存在");
-        }
-        List<Action> actions = actionService.findByProjectIdAndGlobalVar(globalVar.getProjectId(), globalVar.getName());
-        if (!CollectionUtils.isEmpty(actions)) {
-            return Response.fail("GlobalVar正在被action使用，无法删除");
-        }
-
         int deleteRow = globalVarMapper.deleteByPrimaryKey(globalVarId);
         return deleteRow == 1 ? Response.success("删除成功") : Response.fail("删除失败,请稍后重试");
     }
@@ -83,7 +69,6 @@ public class GlobalVarService extends BaseService {
         if (globalVar.getId() == null) {
             return Response.fail("globalVarId不能为空");
         }
-        // 前端限制无法修改name，以防action steps使用到此全局变量时，编译失败
         int updateRow;
         try {
             updateRow = globalVarMapper.updateByPrimaryKeySelective(globalVar);
