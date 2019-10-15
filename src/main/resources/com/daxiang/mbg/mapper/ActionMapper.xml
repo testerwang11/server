@@ -7,7 +7,7 @@
     <result column="description" jdbcType="VARCHAR" property="description" />
     <result column="type" jdbcType="TINYINT" property="type" />
     <result column="invoke" jdbcType="VARCHAR" property="invoke" />
-    <result column="has_return_value" jdbcType="TINYINT" property="hasReturnValue" />
+    <result column="return_value" jdbcType="VARCHAR" property="returnValue" />
     <result column="return_value_desc" jdbcType="VARCHAR" property="returnValueDesc" />
     <result column="creator_uid" jdbcType="INTEGER" property="creatorUid" />
     <result column="create_time" jdbcType="TIMESTAMP" property="createTime" />
@@ -22,6 +22,7 @@
     <result column="params" jdbcType="LONGVARCHAR" property="params" typeHandler="com.daxiang.typehandler.ParamListTypeHandler" />
     <result column="local_vars" jdbcType="LONGVARCHAR" property="localVars" typeHandler="com.daxiang.typehandler.LocalVarListTypeHandler" />
     <result column="steps" jdbcType="LONGVARCHAR" property="steps" typeHandler="com.daxiang.typehandler.StepListTypeHandler" />
+    <result column="java_imports" jdbcType="LONGVARCHAR" property="javaImports" typeHandler="com.daxiang.typehandler.StringListTypeHandler" />
   </resultMap>
   <sql id="Example_Where_Clause">
     <where>
@@ -82,11 +83,11 @@
     </where>
   </sql>
   <sql id="Base_Column_List">
-    id, name, description, type, invoke, has_return_value, return_value_desc, creator_uid, 
+    id, name, description, type, invoke, return_value, return_value_desc, creator_uid, 
     create_time, updator_uid, update_time, platform, page_id, project_id, test_suite_id
   </sql>
   <sql id="Blob_Column_List">
-    params, local_vars, steps
+    params, local_vars, steps, java_imports
   </sql>
   <select id="selectByExampleWithBLOBs" parameterType="com.daxiang.mbg.po.ActionExample" resultMap="ResultMapWithBLOBs">
     select
@@ -141,20 +142,22 @@
       SELECT LAST_INSERT_ID()
     </selectKey>
     insert into action (name, description, type, 
-      invoke, has_return_value, return_value_desc, 
+      invoke, return_value, return_value_desc, 
       creator_uid, create_time, updator_uid, 
       update_time, platform, page_id, 
       project_id, test_suite_id, params, 
       local_vars, 
-      steps
+      steps, 
+      java_imports
       )
     values (#{name,jdbcType=VARCHAR}, #{description,jdbcType=VARCHAR}, #{type,jdbcType=TINYINT}, 
-      #{invoke,jdbcType=VARCHAR}, #{hasReturnValue,jdbcType=TINYINT}, #{returnValueDesc,jdbcType=VARCHAR}, 
+      #{invoke,jdbcType=VARCHAR}, #{returnValue,jdbcType=VARCHAR}, #{returnValueDesc,jdbcType=VARCHAR}, 
       #{creatorUid,jdbcType=INTEGER}, #{createTime,jdbcType=TIMESTAMP}, #{updatorUid,jdbcType=INTEGER}, 
       #{updateTime,jdbcType=TIMESTAMP}, #{platform,jdbcType=TINYINT}, #{pageId,jdbcType=INTEGER}, 
       #{projectId,jdbcType=INTEGER}, #{testSuiteId,jdbcType=INTEGER}, #{params,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.ParamListTypeHandler}, 
       #{localVars,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.LocalVarListTypeHandler}, 
-      #{steps,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.StepListTypeHandler}
+      #{steps,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.StepListTypeHandler}, 
+      #{javaImports,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.StringListTypeHandler}
       )
   </insert>
   <insert id="insertSelective" parameterType="com.daxiang.mbg.po.Action">
@@ -175,8 +178,8 @@
       <if test="invoke != null">
         invoke,
       </if>
-      <if test="hasReturnValue != null">
-        has_return_value,
+      <if test="returnValue != null">
+        return_value,
       </if>
       <if test="returnValueDesc != null">
         return_value_desc,
@@ -214,6 +217,9 @@
       <if test="steps != null">
         steps,
       </if>
+      <if test="javaImports != null">
+        java_imports,
+      </if>
     </trim>
     <trim prefix="values (" suffix=")" suffixOverrides=",">
       <if test="name != null">
@@ -228,8 +234,8 @@
       <if test="invoke != null">
         #{invoke,jdbcType=VARCHAR},
       </if>
-      <if test="hasReturnValue != null">
-        #{hasReturnValue,jdbcType=TINYINT},
+      <if test="returnValue != null">
+        #{returnValue,jdbcType=VARCHAR},
       </if>
       <if test="returnValueDesc != null">
         #{returnValueDesc,jdbcType=VARCHAR},
@@ -267,6 +273,9 @@
       <if test="steps != null">
         #{steps,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.StepListTypeHandler},
       </if>
+      <if test="javaImports != null">
+        #{javaImports,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.StringListTypeHandler},
+      </if>
     </trim>
   </insert>
   <select id="countByExample" parameterType="com.daxiang.mbg.po.ActionExample" resultType="java.lang.Long">
@@ -293,8 +302,8 @@
       <if test="record.invoke != null">
         invoke = #{record.invoke,jdbcType=VARCHAR},
       </if>
-      <if test="record.hasReturnValue != null">
-        has_return_value = #{record.hasReturnValue,jdbcType=TINYINT},
+      <if test="record.returnValue != null">
+        return_value = #{record.returnValue,jdbcType=VARCHAR},
       </if>
       <if test="record.returnValueDesc != null">
         return_value_desc = #{record.returnValueDesc,jdbcType=VARCHAR},
@@ -332,6 +341,9 @@
       <if test="record.steps != null">
         steps = #{record.steps,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.StepListTypeHandler},
       </if>
+      <if test="record.javaImports != null">
+        java_imports = #{record.javaImports,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.StringListTypeHandler},
+      </if>
     </set>
     <if test="_parameter != null">
       <include refid="Update_By_Example_Where_Clause" />
@@ -344,7 +356,7 @@
       description = #{record.description,jdbcType=VARCHAR},
       type = #{record.type,jdbcType=TINYINT},
       invoke = #{record.invoke,jdbcType=VARCHAR},
-      has_return_value = #{record.hasReturnValue,jdbcType=TINYINT},
+      return_value = #{record.returnValue,jdbcType=VARCHAR},
       return_value_desc = #{record.returnValueDesc,jdbcType=VARCHAR},
       creator_uid = #{record.creatorUid,jdbcType=INTEGER},
       create_time = #{record.createTime,jdbcType=TIMESTAMP},
@@ -356,7 +368,8 @@
       test_suite_id = #{record.testSuiteId,jdbcType=INTEGER},
       params = #{record.params,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.ParamListTypeHandler},
       local_vars = #{record.localVars,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.LocalVarListTypeHandler},
-      steps = #{record.steps,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.StepListTypeHandler}
+      steps = #{record.steps,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.StepListTypeHandler},
+      java_imports = #{record.javaImports,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.StringListTypeHandler}
     <if test="_parameter != null">
       <include refid="Update_By_Example_Where_Clause" />
     </if>
@@ -368,7 +381,7 @@
       description = #{record.description,jdbcType=VARCHAR},
       type = #{record.type,jdbcType=TINYINT},
       invoke = #{record.invoke,jdbcType=VARCHAR},
-      has_return_value = #{record.hasReturnValue,jdbcType=TINYINT},
+      return_value = #{record.returnValue,jdbcType=VARCHAR},
       return_value_desc = #{record.returnValueDesc,jdbcType=VARCHAR},
       creator_uid = #{record.creatorUid,jdbcType=INTEGER},
       create_time = #{record.createTime,jdbcType=TIMESTAMP},
@@ -397,8 +410,8 @@
       <if test="invoke != null">
         invoke = #{invoke,jdbcType=VARCHAR},
       </if>
-      <if test="hasReturnValue != null">
-        has_return_value = #{hasReturnValue,jdbcType=TINYINT},
+      <if test="returnValue != null">
+        return_value = #{returnValue,jdbcType=VARCHAR},
       </if>
       <if test="returnValueDesc != null">
         return_value_desc = #{returnValueDesc,jdbcType=VARCHAR},
@@ -436,6 +449,9 @@
       <if test="steps != null">
         steps = #{steps,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.StepListTypeHandler},
       </if>
+      <if test="javaImports != null">
+        java_imports = #{javaImports,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.StringListTypeHandler},
+      </if>
     </set>
     where id = #{id,jdbcType=INTEGER}
   </update>
@@ -445,7 +461,7 @@
       description = #{description,jdbcType=VARCHAR},
       type = #{type,jdbcType=TINYINT},
       invoke = #{invoke,jdbcType=VARCHAR},
-      has_return_value = #{hasReturnValue,jdbcType=TINYINT},
+      return_value = #{returnValue,jdbcType=VARCHAR},
       return_value_desc = #{returnValueDesc,jdbcType=VARCHAR},
       creator_uid = #{creatorUid,jdbcType=INTEGER},
       create_time = #{createTime,jdbcType=TIMESTAMP},
@@ -457,7 +473,8 @@
       test_suite_id = #{testSuiteId,jdbcType=INTEGER},
       params = #{params,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.ParamListTypeHandler},
       local_vars = #{localVars,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.LocalVarListTypeHandler},
-      steps = #{steps,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.StepListTypeHandler}
+      steps = #{steps,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.StepListTypeHandler},
+      java_imports = #{javaImports,jdbcType=LONGVARCHAR,typeHandler=com.daxiang.typehandler.StringListTypeHandler}
     where id = #{id,jdbcType=INTEGER}
   </update>
   <update id="updateByPrimaryKey" parameterType="com.daxiang.mbg.po.Action">
@@ -466,7 +483,7 @@
       description = #{description,jdbcType=VARCHAR},
       type = #{type,jdbcType=TINYINT},
       invoke = #{invoke,jdbcType=VARCHAR},
-      has_return_value = #{hasReturnValue,jdbcType=TINYINT},
+      return_value = #{returnValue,jdbcType=VARCHAR},
       return_value_desc = #{returnValueDesc,jdbcType=VARCHAR},
       creator_uid = #{creatorUid,jdbcType=INTEGER},
       create_time = #{createTime,jdbcType=TIMESTAMP},
