@@ -1,6 +1,5 @@
 package com.daxiang.service;
 
-import com.alibaba.fastjson.JSONObject;
 import com.daxiang.mbg.mapper.TestTaskMapper;
 import com.daxiang.mbg.po.*;
 import com.daxiang.model.vo.TestTaskVo;
@@ -130,8 +129,11 @@ public class TestTaskService extends BaseService {
      * @return
      */
     private Map<String, List<Action>> allocateTestcaseToDevice(List<String> deviceIds, List<Action> testcases, Integer runMode) {
-        if (CollectionUtils.isEmpty(deviceIds) || CollectionUtils.isEmpty(testcases)) {
-            throw new BusinessException("设备或用例为空，无法分配");
+        if (CollectionUtils.isEmpty(deviceIds)) {
+            throw new BusinessException("设备不能为空");
+        }
+        if (CollectionUtils.isEmpty(testcases)) {
+            throw new BusinessException("测试用例不能为空");
         }
 
         Map<String, List<Action>> result = new HashMap<>(); // deviceId : List<Action>
@@ -279,28 +281,40 @@ public class TestTaskService extends BaseService {
         return Response.success(summary);
     }
 
-    public Response getTestTaskProgress(Integer testTaskId) {
+    @Transactional
+    public Response delete(Integer testTaskId) {
         if (testTaskId == null) {
             return Response.fail("testTaskId不能为空");
         }
 
-        List<DeviceTestTask> deviceTestTasks = deviceTestTaskService.findByTestTaskId(testTaskId);
-        if (CollectionUtils.isEmpty(deviceTestTasks)) {
-            return Response.fail("未找到设备测试任务");
+        TestTask testTask = testTaskMapper.selectByPrimaryKey(testTaskId);
+        if (testTask == null) {
+            return Response.fail("testTask不存在");
         }
 
-        List<JSONObject> progresss = deviceTestTasks.stream().map(deviceTestTask -> {
-            JSONObject progress = new JSONObject();
-            progress.put("deviceId", deviceTestTask.getDeviceId());
+        List<DeviceTestTask> deviceTestTasks = deviceTestTaskService.findByTestTaskId(testTaskId);
 
-            List<Testcase> testcases = deviceTestTask.getTestcases();
-            long finishedTestcaseCount = testcases.stream().filter(testcase -> testcase.getEndTime() != null).count();
-            long finishedTestcasePercent = finishedTestcaseCount * 100 / testcases.size();
-            progress.put("finishedTestcasePercent", finishedTestcasePercent);
+        if (!CollectionUtils.isEmpty(deviceTestTasks)) {
+            List<DeviceTestTask> alreadyStartedDeviceTestTasks = deviceTestTasks.stream().filter(deviceTestTask -> deviceTestTask.getStatus() != DeviceTestTask.UNSTART_STATUS).collect(Collectors.toList());
+            if (!CollectionUtils.isEmpty(alreadyStartedDeviceTestTasks)) {
+                // 有设备已经运行过测试任务，不让删除整个testTask
+                String alreadyStartedDeviceIds = alreadyStartedDeviceTestTasks.stream().map(DeviceTestTask::getDeviceId).collect(Collectors.joining("、"));
+                return Response.fail(alreadyStartedDeviceIds + "运行过测试任务，无法删除");
+            } else {
+                // 批量删除deviceTestTask
+                int deleteRow = deviceTestTaskService.deleteInBatch(deviceTestTasks.stream().map(DeviceTestTask::getId).collect(Collectors.toList()));
+                if (deleteRow != deviceTestTasks.size()) {
+                    throw new BusinessException(String.format("删除deviceTestTask失败，deviceTestTasks: %d, deleteRow: %d", deviceTestTasks.size(), deleteRow));
+                }
+            }
+        }
 
-            return progress;
-        }).collect(Collectors.toList());
-
-        return Response.success(progresss);
+        // 删除testTask
+        int deleteTestTaskRow = testTaskMapper.deleteByPrimaryKey(testTaskId);
+        if (deleteTestTaskRow == 1) {
+            return Response.success("删除成功");
+        } else {
+            throw new BusinessException("删除失败，请稍后重试");
+        }
     }
 }
