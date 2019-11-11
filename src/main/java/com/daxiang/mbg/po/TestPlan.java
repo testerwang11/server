@@ -14,6 +14,8 @@ public class TestPlan implements Serializable {
     /** 高效模式 */
     public static final int RUN_MODE_EFFICIENCY = 2;
 
+    public static final int ENABLE_SCHEDULE = 1;
+
     private Integer id;
 
     /**
@@ -74,6 +76,21 @@ public class TestPlan implements Serializable {
      */
     @NotNull(message = "运行模式不能为空")
     private Integer runMode;
+
+    /**
+     * cron表达式
+     *
+     * @mbg.generated
+     */
+    private String cronExpression;
+
+    /**
+     * 是否开启定时任务，0: 关闭 1: 开启
+     *
+     * @mbg.generated
+     */
+    @NotNull(message = "是否开启定时任务不能为空")
+    private Integer enableSchedule;
 
     /**
      * 创建人
@@ -179,6 +196,22 @@ public class TestPlan implements Serializable {
         this.runMode = runMode;
     }
 
+    public String getCronExpression() {
+        return cronExpression;
+    }
+
+    public void setCronExpression(String cronExpression) {
+        this.cronExpression = cronExpression;
+    }
+
+    public Integer getEnableSchedule() {
+        return enableSchedule;
+    }
+
+    public void setEnableSchedule(Integer enableSchedule) {
+        this.enableSchedule = enableSchedule;
+    }
+
     public Integer getCreatorUid() {
         return creatorUid;
     }
@@ -226,6 +259,8 @@ public class TestPlan implements Serializable {
         sb.append(", afterClass=").append(afterClass);
         sb.append(", afterMethod=").append(afterMethod);
         sb.append(", runMode=").append(runMode);
+        sb.append(", cronExpression=").append(cronExpression);
+        sb.append(", enableSchedule=").append(enableSchedule);
         sb.append(", creatorUid=").append(creatorUid);
         sb.append(", createTime=").append(createTime);
         sb.append(", testSuites=").append(testSuites);
