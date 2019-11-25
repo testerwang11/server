@@ -2,15 +2,15 @@ package com.daxiang.service;
 
 import com.alibaba.fastjson.JSONObject;
 import com.daxiang.agent.AgentApi;
+import com.daxiang.exception.BusinessException;
 import com.daxiang.mbg.mapper.ActionMapper;
-import com.daxiang.mbg.po.Action;
-import com.daxiang.mbg.po.ActionExample;
-import com.daxiang.mbg.po.GlobalVar;
+import com.daxiang.mbg.po.*;
 import com.daxiang.model.Page;
 import com.daxiang.model.PageRequest;
 import com.daxiang.model.Response;
 import com.daxiang.model.action.Step;
 import com.daxiang.model.request.ActionDebugRequest;
+import com.daxiang.model.vo.ActionCascaderVo;
 import com.daxiang.model.vo.ActionVo;
 import com.daxiang.model.UserCache;
 import com.github.pagehelper.PageHelper;
@@ -39,6 +39,12 @@ public class ActionService extends BaseService {
     private GlobalVarService globalVarService;
     @Autowired
     private AgentApi agentApi;
+    @Autowired
+    private TestSuiteService testSuiteService;
+    @Autowired
+    private CategoryService categoryService;
+    @Autowired
+    private TestPlanService testPlanService;
 
     public Response add(Action action) {
         action.setCreatorUid(getUid());
@@ -54,17 +60,7 @@ public class ActionService extends BaseService {
     }
 
     public Response delete(Integer actionId) {
-        if (actionId == null) {
-            return Response.fail("actionId不能为空");
-        }
-
-        // 检查action是否被其他step使用
-        List<Action> actions = actionDao.selectByStepActionId(actionId);
-        if (!CollectionUtils.isEmpty(actions)) {
-            // 正在使用该action的actionNames
-            String usingActionNames = actions.stream().map(Action::getName).collect(Collectors.joining("、"));
-            return Response.fail(usingActionNames + "正在使用此action，无法删除");
-        }
+        checkActionIsNotUsingByActionStepsOrTestPlans(actionId);
 
         int deleteRow = actionMapper.deleteByPrimaryKey(actionId);
         return deleteRow == 1 ? Response.success("删除成功") : Response.fail("删除失败，请稍后重试");
@@ -77,8 +73,13 @@ public class ActionService extends BaseService {
      * @return
      */
     public Response update(Action action) {
-        if (action.getId() == null) {
-            return Response.fail("actionId不能为空");
+        // action状态变为草稿或者禁用，需要检查该action没有被其他action steps或testplans使用
+        if (action.getState() == Action.DRAFT_STATE || action.getState() == Action.DISABLE_STATE) {
+            checkActionIsNotUsingByActionStepsOrTestPlans(action.getId());
+        } else {
+            if (action.getId() == null) {
+                return Response.fail("actionId不能为空");
+            }
         }
 
         action.setUpdateTime(new Date());
@@ -153,6 +154,9 @@ public class ActionService extends BaseService {
         if (action.getCategoryId() != null) {
             criteria.andCategoryIdEqualTo(action.getCategoryId());
         }
+        if (action.getState() != null) {
+            criteria.andStateEqualTo(action.getState());
+        }
 
         actionExample.setOrderByClause("create_time desc");
         return actionMapper.selectByExampleWithBLOBs(actionExample);
@@ -187,7 +191,75 @@ public class ActionService extends BaseService {
         actionExample.or(criteria3);
         actionExample.setOrderByClause("create_time desc");
 
-        return Response.success(actionMapper.selectByExampleWithBLOBs(actionExample));
+        List<Action> actions = actionMapper.selectByExampleWithBLOBs(actionExample).stream()
+                .filter(action -> action.getState() == Action.RELEASE_STATE).collect(Collectors.toList());
+        List<ActionCascaderVo> result = new ArrayList<>();
+
+        Map<Integer, List<Action>> groupByActionTypeMap = actions.stream().collect(Collectors.groupingBy(Action::getType));
+        groupByActionTypeMap.forEach((type, actionList) -> {
+            ActionCascaderVo root = new ActionCascaderVo();
+            root.setName(type == Action.TYPE_BASE ? "基础组件" : type == Action.TYPE_TESTCASE ? "测试用例" : "封装组件");
+            List<ActionCascaderVo> rootChildren = new ArrayList<>();
+            root.setChildren(rootChildren);
+            if (type == Action.TYPE_TESTCASE) {
+                handleTestcases(actionList, rootChildren);
+            } else {
+                handleNonTestcases(actionList, rootChildren);
+            }
+            result.add(root);
+        });
+
+        return Response.success(result);
+    }
+
+    private void handleNonTestcases(List<Action> actionList, List<ActionCascaderVo> rootChildren) {
+        // 分类
+        List<Integer> categoryIds = actionList.stream().filter(action -> Objects.nonNull(action.getCategoryId())).map(Action::getCategoryId).collect(Collectors.toList());
+        List<Category> categories = categoryService.selectByPrimaryKeys(categoryIds).stream().collect(Collectors.toList());
+
+        // 有分类的action
+        categories.forEach(category -> {
+            // 第二级
+            ActionCascaderVo categoryCascaderVo = new ActionCascaderVo();
+            categoryCascaderVo.setName(category.getName());
+            // 有分类的actions
+            List<ActionCascaderVo> actionCascaderVosInCategory = actionList.stream()
+                    .filter(action -> action.getCategoryId() == category.getId())
+                    .map(action -> ActionCascaderVo.convert(action)).collect(Collectors.toList());
+            categoryCascaderVo.setChildren(actionCascaderVosInCategory);
+            rootChildren.add(categoryCascaderVo);
+        });
+
+        // 没有分类的actions
+        List<ActionCascaderVo> actionCascaderVosNotInCategory = actionList.stream()
+                .filter(action -> Objects.isNull(action.getCategoryId()))
+                .map(action -> ActionCascaderVo.convert(action)).collect(Collectors.toList());
+        rootChildren.addAll(actionCascaderVosNotInCategory);
+    }
+
+    private void handleTestcases(List<Action> testcaseList, List<ActionCascaderVo> rootChildren) {
+        // 测试集
+        List<Integer> testSuiteIds = testcaseList.stream().filter(action -> Objects.nonNull(action.getTestSuiteId())).map(Action::getTestSuiteId).collect(Collectors.toList());
+        List<TestSuite> testSuites = testSuiteService.selectByPrimaryKeys(testSuiteIds).stream().collect(Collectors.toList());
+
+        // 有测试集的testcases
+        testSuites.forEach(testSuite -> {
+            // 第二级
+            ActionCascaderVo testSuiteCascaderVo = new ActionCascaderVo();
+            testSuiteCascaderVo.setName(testSuite.getName());
+            // 有测试集的actions
+            List<ActionCascaderVo> actionCascaderVosInTestSuite = testcaseList.stream()
+                    .filter(action -> action.getTestSuiteId() == testSuite.getId())
+                    .map(action -> ActionCascaderVo.convert(action)).collect(Collectors.toList());
+            testSuiteCascaderVo.setChildren(actionCascaderVosInTestSuite);
+            rootChildren.add(testSuiteCascaderVo);
+        });
+
+        // 没有测试集的testcases
+        List<ActionCascaderVo> actionCascaderVosNotInTestSuite = testcaseList.stream()
+                .filter(action -> Objects.isNull(action.getTestSuiteId()))
+                .map(action -> ActionCascaderVo.convert(action)).collect(Collectors.toList());
+        rootChildren.addAll(actionCascaderVosNotInTestSuite);
     }
 
     /**
@@ -210,9 +282,14 @@ public class ActionService extends BaseService {
             return Response.fail("至少选择一个步骤");
         }
 
+        long enabledStepCount = steps.stream().filter(step -> step.getStatus() == Step.ENABLE_STATUS).count();
+        if (enabledStepCount == 0) {
+            return Response.fail("至少选择一个启用的步骤");
+        }
+
         for (Step step : steps) {
             if (step.getActionId() == null) {
-                return Response.fail("step action不能为空");
+                return Response.fail("步骤" + step.getNumber() + " action不能为空");
             }
         }
 
@@ -230,8 +307,7 @@ public class ActionService extends BaseService {
         requestBody.put("deviceId", debugInfo.getDeviceId());
 
         // 发送到agent执行
-        Response agentResponse = agentApi.debugAction(debugInfo.getAgentIp(), debugInfo.getAgentPort(), requestBody);
-        return agentResponse.isSuccess() ? Response.success(agentResponse.getMsg()) : Response.fail(agentResponse.getMsg());
+        return agentApi.debugAction(debugInfo.getAgentIp(), debugInfo.getAgentPort(), requestBody);
     }
 
     /**
@@ -260,6 +336,31 @@ public class ActionService extends BaseService {
      */
     public void buildActionTree(List<Action> actions) {
         new ActionTreeBuilder(actionMapper).build(actions);
+    }
+
+    /**
+     * 检查action没有被action step或testplan使用
+     * @param actionId
+     */
+    private void checkActionIsNotUsingByActionStepsOrTestPlans(Integer actionId) {
+        if (actionId == null) {
+            throw new BusinessException("actionId不能为空");
+        }
+
+        // 检查action是否被其他action step使用
+        List<Action> actions = actionDao.selectByStepActionId(actionId);
+        if (!CollectionUtils.isEmpty(actions)) {
+            // 正在使用该action的actionNames
+            String usingActionNames = actions.stream().map(Action::getName).collect(Collectors.joining("、"));
+            throw new BusinessException(usingActionNames + "正在使用此action");
+        }
+
+        // 检查action是否被testplan使用
+        List<TestPlan> testPlans = testPlanService.findByActionId(actionId);
+        if (!CollectionUtils.isEmpty(testPlans)) {
+            String usingTestPlanNames = testPlans.stream().map(TestPlan::getName).collect(Collectors.joining("、"));
+            throw new BusinessException(usingTestPlanNames + "正在使用此action");
+        }
     }
 
 }
